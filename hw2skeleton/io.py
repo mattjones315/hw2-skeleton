@@ -15,7 +15,6 @@ def read_active_sites(dir):
     active_sites = []
     # iterate over each .pdb file in the given directory
     for filepath in glob.iglob(os.path.join(dir, "*.pdb")):
-
         active_sites.append(read_active_site(filepath))
 
     print("Read in %d active sites"%len(active_sites))
