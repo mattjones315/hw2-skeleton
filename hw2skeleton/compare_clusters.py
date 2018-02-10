@@ -1,5 +1,6 @@
 from .utils import Atom, Residue, ActiveSite
-from .similarity import SimilarityComparator
+from .cluster import create_similarity_matrix, cluster_by_partitioning, cluster_hierarchically, \
+        convert_indices_to_active_sites
 import numpy as np
 from tqdm import tqdm
 
@@ -34,6 +35,8 @@ def rand_index(clusterings_1, clusterings_2, active_sites):
     fp = 0
     fn = 0
 
+    print(active_sites)
+
     # iterate over all pairs of sample
     for a1 in active_sites:
         for a2 in active_sites:
@@ -42,26 +45,112 @@ def rand_index(clusterings_1, clusterings_2, active_sites):
 
             # iterate over all pairs of clusterings to compare assignments of a1 and a2
             for c1 in clusterings_1:
-                for c2 in clusterings_2:
 
-                    if a1.name in c1 and a2.name in c1:
+                if a1.name in c1 and a2.name in c1:
+
+                    same = False
+
+                    for c2 in clusterings_2:
+
                         # a1 and a2 are assigned to same cluster in both sets
                         if a1.name in c2 and a2.name in c2:
-                            tp += 1
+                            same = True
 
-                        # a1 and a2 are assigned to different clusters in both sets
-                        else:
-                            fp += 1
+                    if same:
+                        tp += 1
+                    else:
+                        fp += 1
 
-                    if a1.name in c1 and a2.name not in c1:
-                        # a1 and a2 are assigned to different clusters in both sets
+
+                if a1.name in c1 and a2.name not in c1:
+                    diff = False
+
+                    for c2 in clusterings_2:
+
                         if a1.name in c2 and not a2.name in c2:
-                            tn += 1
+                            diff = True
 
-                        # a1 and a2 are assigned to the same cluster in one set, but different
-                        # clusters in another set
-                        if a1.name in c2 and a2.name in c2:
-                            fn += 1
+                    if diff:
+                        tn += 1
+                    else:
+                        fn += 1
 
     return (tp + tn) / (tp + fp + tn + fn)
 
+def benchmark_clusters(active_sites, alg = "P", sim_matrix=None, metric="RMSD", N=1000):
+
+    if sim_matrix is None:
+
+        sim_matrix = create_similarity_matrix(active_sites, metric)
+
+    ssds = []
+
+    print("Benchmarking " + metric + " similarity")
+    for i in tqdm(range(N)):
+
+        if alg == "P":
+
+            assignments = cluster_by_partitioning(active_sites, sim_matrix)
+            ssds.append(sum_of_distances(assignments, sim_matrix))
+
+        if alg == "H":
+
+            assignments = cluster_hierarchically(active_sites, sim_matrix)
+            ssds.append(sum_of_distances(assignments, sim_matrix))
+
+    return np.array(ssds)
+
+def benchmark_rand(active_sites, alg="P", sim_matrix=None, metric="RMSD", N=100, step=10):
+
+    if sim_matrix is None:
+        sim_matrix = create_similarity_matrix(active_sites, metric)
+
+    rs = {}
+
+    for i in tqdm(range(step, N+step, step)):
+
+        if alg == "P":
+            cs = []
+
+            for j in range(i):
+                assignments = cluster_by_partitioning(active_sites, sim_matrix)
+                clusters = convert_indices_to_active_sites(assignments, active_sites)
+                cs.append(clusters)
+
+            rs[i] = compute_avg_rand(cs, active_sites)
+
+    return rs
+
+def compute_avg_rand(all_clusters, active_sites):
+
+    rand = []
+
+    for i in range(len(all_clusters)):
+
+        for j in range(len(all_clusters)):
+
+            if i != j:
+
+                rand.append(rand_index(all_clusters[i], all_clusters[j], active_sites))
+
+    return np.mean(np.array(rand))
+
+
+def rand_versus(active_sites, sim_matrix=None, metric="RMSD", N=30, step=5):
+
+    if sim_matrix is None:
+        sim_matrix = create_similarity_matrix(active_sites, metric)
+
+    rs = {}
+
+    for i in tqdm(range(step, N+step, step)):
+
+        a1 = cluster_by_partitioning(active_sites, sim_matrix, K=i)
+        a2 = cluster_hierarchically(active_sites, sim_matrix, K=i)
+
+        c1 = convert_indices_to_active_sites(a1, active_sites)
+        c2 = convert_indices_to_active_sites(a2, active_sites)
+
+        rs[i] = rand_index(c1, c2, active_sites)
+
+    return rs

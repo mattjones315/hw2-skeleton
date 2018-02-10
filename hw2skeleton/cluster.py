@@ -74,10 +74,14 @@ def cluster_by_partitioning(active_sites, sim_matrix=None, K=5, MAX_ITER=1000):
 
         return k_ii
 
+    if active_sites is None:
+        return None
+
     N = len(active_sites)
 
     if N <= K:
         return [[a.name] for a in active_sites]
+
 
     if sim_matrix is None:
         sim_matrix = create_similarity_matrix(active_sites, "hydrophobicity")
@@ -106,7 +110,7 @@ def cluster_by_partitioning(active_sites, sim_matrix=None, K=5, MAX_ITER=1000):
     return curr_assignment
 
 
-def cluster_hierarchically(active_sites, sim_matrix=None, linkage="single", K=5):
+def cluster_hierarchically(active_sites, sim_matrix=None, linkage="single", K=10):
     """
     Cluster the given set of ActiveSite instances using a hierarchical algorithm.
 
@@ -132,6 +136,9 @@ def cluster_hierarchically(active_sites, sim_matrix=None, linkage="single", K=5)
 
         to_merge = np.unravel_index(np.argmin(linkage_mat), (C, C))
         return to_merge
+
+    if active_sites is None:
+        return None
 
     # Fill in your code here!
     N = len(active_sites)
